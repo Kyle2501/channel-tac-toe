@@ -1,0 +1,133 @@
+<html>
+  <head>
+      <script src='/_ah/channel/jsapi'></script>
+      <style type='text/css'>
+        .row {
+          float: top;
+        }
+          
+        .piece {
+          width: 50px;
+          height: 50px;
+          display: inline-block;
+          font-size: 40px;
+          border-width: 1px;
+          border-style: solid;
+        }
+
+      </style>
+  </head>
+  <body>
+    <script type='text/javascript'>
+      var state = {
+        me: '{{ me }}',
+        userX: '{{ userX }}',
+        userY: '{{ userY }}',
+        token: '{{ token }}',
+        board: '{{ board }}',
+        game_key: '{{ game_key }}',
+        moveX: '{{ moveX }}' == 'True'
+      };
+      
+      updateGame = function(board) {
+        for (i = 0; i < 9; i++) {
+          document.getElementById(i).innerHTML = state.board[i];
+        }
+        
+        if (state.opponent == '') {
+          document.getElementById('other-player').style.visibility = 'hidden';
+        } else if (isMyMove()) {
+          document.getElementById('your-move').style.visibility = 'visible';
+          document.getElementById('their-move').style.visibility = 'hidden';
+        } else {
+          document.getElementById('your-move').style.visibility = 'hidden';
+          document.getElementById('their-move').style.visibility = 'visible';
+        }
+      };
+      
+      initialize = function() {
+        var i;
+        for (i = 0; i < 9; i++) {
+          var square = document.getElementById(i);
+          square.onmouseover = new Function('highlightSquare(' + i + ')');
+          square.onclick = new Function('moveInSquare(' + i + ')');
+        }
+      }
+      
+      isMyMove = function() {
+        return state.moveX == (state.userX == state.me);
+      }
+      
+      myPiece = function() {
+        return state.userX == state.me ? 'X' : 'O';
+      }
+      
+      sendMessage = function(path, param) {
+        path = path + '?i=' + param;
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', path, true);
+        xhr.send();
+      };        
+      
+      moveInSquare = function(id) {
+        if (isMyMove() && state.board[id] == ' ') {
+          sendMessage('/move', id);
+        }
+      }
+      
+      highlightSquare = function(id) {
+        for (i = 0; i < 9; i++) {
+          if (i == id) {
+            if (board[i] = ' ') {
+              color = 'lightblue';
+            } else {
+              color = 'lightgrey';
+            }
+          } else {
+            color = 'white';
+          }
+          
+          document.getElementById(i).style['background-color'] = color;
+        }
+      }
+
+      setTimeout(initialize, 100);
+      
+    </script>
+    <div id='display-area'>
+      <h2>Channel-based Tic Tac Toe</h2>
+      <div id='other-player' style='visibility:hidden'>
+        Waiting for another player to join.<br>
+        Send them this link to play:<br>
+        <div id='game-link'>
+          <a href='http://localhost:8080/?g={{ game_key }}'>
+            http://localhost:8080/?g={{ game_key }}
+          </a>
+        </div>
+      </div>
+      <div id='your-move' style='visibility:hidden'>
+        Your move! Click a square to place your piece.
+      </div>
+      <div id='their-move' style='visibility:hidden'>
+        Waiting for other player to move...
+      </div>
+      <div id='board'>
+        <div class='row'>
+		      <span class='piece' id='0'></span>
+		      <span class='piece' id='1'></span>
+		      <span class='piece' id='2'></span>
+	      </div>
+        <div class='row'>
+		      <span class='piece' id='3'></span>
+		      <span class='piece' id='4'></span>
+		      <span class='piece' id='5'></span>
+        </div>
+        <div class='row'>
+	        <span class='piece' id='6'></span>
+		      <span class='piece' id='7'></span>
+		      <span class='piece' id='8'></span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
