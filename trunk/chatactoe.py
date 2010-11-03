@@ -65,6 +65,7 @@ class MovePage(webapp.RequestHandler):
           if (boardList[id] == ' '):
             boardList[id] = 'X' if game.moveX else 'Y'
             game.board = "".join(boardList)
+            game.moveX = not game.moveX
             game.put()
             GameUpdater(game).send_update()
             self.response.out.write('ok')
@@ -94,8 +95,7 @@ class MainPage(webapp.RequestHandler):
         if not game.userY:
           game.userY = user
           game.put()
-          GameUpdater(game).send_update()
-
+          
       if game:
         token = channel.create_channel(user.user_id() + game_key)
         template_values = {'token': token,
