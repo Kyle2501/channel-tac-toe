@@ -14,68 +14,6 @@
           border-width: 1px;
           border-style: solid;
         }
-
-        tr {
-          background-color: #E3E9FF
-        }
-
-        table {
-          border-collapse: collapse;
-        }
-
-        th {
-          background-color: #C5D7EF;
-          padding: 16px;
-          font-family: sans-serif;
-        }
-
-        tr {
-          padding: 8px;
-        }
-
-        td {
-          background-color: #E3E9FF
-          margin: 0px;
-          border: none;
-          font-family: sans-serif;
-        }
-
-        td.focus {
-          background-color: yellow;
-        }
-
-        td.clientA {
-          width: 300px;
-        }
-
-        td.direction {
-          text-align: center;
-          width: 25px;
-        }
-
-        td.action {
-          text-align: center;
-          width: 100px;
-        }
-
-        td.app {
-        }
-
-        td.clientB {
-          width: 250px;
-        }
-
-        td.global {
-          background-color: #F3F9FF;
-          text-align: center;
-          font-style: italic;
-          padding: 32px;
-        }
-
-        .code {
-          font-family: "Courier New";
-        }
-
       </style>
   </head>
   <body>
@@ -90,13 +28,13 @@
         moveX: '{{ moveX }}' == 'True'
       };
 
-      updateGame = function(board) {
+      updateGame = function() {
         for (i = 0; i < 9; i++) {
           document.getElementById(i).innerHTML = state.board[i];
         }
 
-        if (state.opponent == '') {
-          document.getElementById('other-player').style.visibility = 'hidden';
+        if (state.userY == '') {
+          document.getElementById('other-player').style.visibility = 'visible';
         } else if (isMyMove()) {
           document.getElementById('your-move').style.visibility = 'visible';
           document.getElementById('their-move').style.visibility = 'hidden';
@@ -113,6 +51,7 @@
           square.onmouseover = new Function('highlightSquare(' + i + ')');
           square.onclick = new Function('moveInSquare(' + i + ')');
         }
+        updateGame();
       }
 
       isMyMove = function() {
@@ -160,15 +99,24 @@
           document.getElementById(i).style['background-color'] = color;
         }
       }
+      
+      onOpened = function() {
+      };
+      
+      onMessage = function(m) {
+        newState = JSON.parse(m.data);
+        state.board = newState.board;
+        state.userY = newState.userY;
+        state.moveX = newState.moveX;
+        updateGame();
+      }
 
       setTimeout(initialize, 100);
 
       channel = new goog.appengine.Channel('{{ token }}');
       socket = channel.open();
-      socket.onopen = showConnectedUI();
-      socket.onmessage = function(m) {
-        alert(m.data);
-      }
+      socket.onopen = onOpened;
+      socket.onmessage = onMessage;
 
     </script>
     <div id='display-area'>
