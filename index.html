@@ -5,7 +5,7 @@
         .row {
           float: top;
         }
-          
+
         .piece {
           width: 50px;
           height: 50px;
@@ -13,6 +13,67 @@
           font-size: 40px;
           border-width: 1px;
           border-style: solid;
+        }
+
+        tr {
+          background-color: #E3E9FF
+        }
+
+        table {
+          border-collapse: collapse;
+        }
+
+        th {
+          background-color: #C5D7EF;
+          padding: 16px;
+          font-family: sans-serif;
+        }
+
+        tr {
+          padding: 8px;
+        }
+
+        td {
+          background-color: #E3E9FF
+          margin: 0px;
+          border: none;
+          font-family: sans-serif;
+        }
+
+        td.focus {
+          background-color: yellow;
+        }
+
+        td.clientA {
+          width: 300px;
+        }
+
+        td.direction {
+          text-align: center;
+          width: 25px;
+        }
+
+        td.action {
+          text-align: center;
+          width: 100px;
+        }
+
+        td.app {
+        }
+
+        td.clientB {
+          width: 250px;
+        }
+
+        td.global {
+          background-color: #F3F9FF;
+          text-align: center;
+          font-style: italic;
+          padding: 32px;
+        }
+
+        .code {
+          font-family: "Courier New";
         }
 
       </style>
@@ -28,12 +89,12 @@
         game_key: '{{ game_key }}',
         moveX: '{{ moveX }}' == 'True'
       };
-      
+
       updateGame = function(board) {
         for (i = 0; i < 9; i++) {
           document.getElementById(i).innerHTML = state.board[i];
         }
-        
+
         if (state.opponent == '') {
           document.getElementById('other-player').style.visibility = 'hidden';
         } else if (isMyMove()) {
@@ -44,7 +105,7 @@
           document.getElementById('their-move').style.visibility = 'visible';
         }
       };
-      
+
       initialize = function() {
         var i;
         for (i = 0; i < 9; i++) {
@@ -53,28 +114,37 @@
           square.onclick = new Function('moveInSquare(' + i + ')');
         }
       }
-      
+
       isMyMove = function() {
         return state.moveX == (state.userX == state.me);
       }
-      
+
       myPiece = function() {
         return state.userX == state.me ? 'X' : 'O';
       }
-      
-      sendMessage = function(path, param) {
-        path = path + '?i=' + param;
+
+      sendMessage = function(path, opt_param) {
+        path += '?g=' + state.game_key;
+        if (opt_param) {
+          path += '&' + opt_param;
+        }
         var xhr = new XMLHttpRequest();
         xhr.open('POST', path, true);
         xhr.send();
-      };        
-      
+      };
+
+      onOpened = function() {
+        connected = true;
+        sendMessage('opened');
+        updateBoard();
+      };
+
       moveInSquare = function(id) {
         if (isMyMove() && state.board[id] == ' ') {
-          sendMessage('/move', id);
+          sendMessage('/move', 'i=' + id);
         }
       }
-      
+
       highlightSquare = function(id) {
         for (i = 0; i < 9; i++) {
           if (i == id) {
@@ -86,13 +156,20 @@
           } else {
             color = 'white';
           }
-          
+
           document.getElementById(i).style['background-color'] = color;
         }
       }
 
       setTimeout(initialize, 100);
-      
+
+      channel = new goog.appengine.Channel('{{ token }}');
+      socket = channel.open();
+      socket.onopen = showConnectedUI();
+      socket.onmessage = function(m) {
+        alert(m.data);
+      }
+
     </script>
     <div id='display-area'>
       <h2>Channel-based Tic Tac Toe</h2>

@@ -31,17 +31,45 @@ class Game(db.Model):
   moveX = db.BooleanProperty()
 
 
+class GameUpdater():
+  game = None
+
+  def __init__(self, game):
+    self.game = game
+
+  def send_update(self):
+    gameUpdate = {
+      'board': self.game.board,
+      'userX': self.game.userX.user_id(),
+      'userY': 0 if not self.game.userY else self.game.userY.user_id(),
+      'moveX': self.game.moveX
+    }
+
+    message = simplejson.dumps(gameUpdate)
+    channel.send_message(self.game.userX.user_id() + self.game.key().id_or_name(), message)
+    if self.game.userY:
+      channel.send_message(self.game.userY.user_id() + self.game.key().id_or_name(), message)
+
+
 class MovePage(webapp.RequestHandler):
-  
+
   def post(self):
     user = users.get_current_user()
-    id = self.request.get('i')
+    id = int(self.request.get('i'))
     game_key = self.request.get('g')
-    if user and id and game:
+    if user and id:
       game = Game.get_by_key_name(game_key)
-      self.response.out.write('ok')
-    else:
-      self.response.out.write('no')
+      if game and user == game.userX or user == game.userY:
+        if game.moveX == (user == game.userX):
+          boardList = list(game.board)
+          if (boardList[id] == ' '):
+            boardList[id] = 'X' if game.moveX else 'Y'
+            game.board = "".join(boardList)
+            game.put()
+            GameUpdater(game).send_update()
+            self.response.out.write('ok')
+            return
+    self.response.out.write('no')
 
 
 class MainPage(webapp.RequestHandler):
@@ -66,7 +94,8 @@ class MainPage(webapp.RequestHandler):
         if not game.userY:
           game.userY = user
           game.put()
-        
+          GameUpdater(game).send_update()
+
       if game:
         token = channel.create_channel(user.user_id() + game_key)
         template_values = {'token': token,
@@ -77,7 +106,7 @@ class MainPage(webapp.RequestHandler):
                            'userX': game.userX.user_id(),
                            'userY': 0 if not game.userY else game.userY.user_id()}
         path = os.path.join(os.path.dirname(__file__), 'index.html')
- 
+
         self.response.out.write(template.render(path, template_values))
       else:
         self.response.out.write('No such game')
@@ -86,7 +115,8 @@ class MainPage(webapp.RequestHandler):
 
 
 application = webapp.WSGIApplication([
-    ('/', MainPage)], debug=True)
+    ('/', MainPage),
+    ('/move', MovePage)], debug=True)
 
 
 def main():
