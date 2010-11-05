@@ -1,7 +1,6 @@
 <html>
   <head>
-<!--        <script src='/_ah/channel/jsapi'></script> -->
-      <script src='http://qabdt6.prod.google.com:9886/talkgadget/channel.js'></script>
+      <script src='/_ah/channel/jsapi'></script>
       <style type='text/css'>
         .row {
           float: top;
@@ -63,28 +62,32 @@
   <body>
     <script type='text/javascript'>
       var state = {
-        me: '{{ me }}',
-        userX: '{{ userX }}',
-        userY: '{{ userY }}',
-        token: '{{ token }}',
-        board: '{{ board }}',
         game_key: '{{ game_key }}',
-        moveX: '{{ moveX }}' == 'True'
+        me: '{{ me }}'
       };
 
       updateGame = function() {
         for (i = 0; i < 9; i++) {
-          document.getElementById(i).innerHTML = state.board[i];
+          var square = document.getElementById(i);
+          square.innerHTML = state.board[i];
+          if (state.winner != '' && state.winningBoard != '') {
+            if (state.winningBoard[i] == state.board[i]) {
+              square.style.background = "red";
+            }
+          }
         }
         
         var display = {
           'other-player': 'none',
           'your-move': 'none',
-          'their-move': 'none',
+          'their-move': 'none'
         }; 
 
-        if (state.userY == '') {
-          display['other-player'] = 'block';
+        if (!state.userO || state.userO == '') {
+          display['other-player'] = 'block';          
+          var path = window.location.href + '?g={{ game_key }}';
+          var link = '<a href="' + path + '">' + path + '</a">';
+          document.getElementById('other-player').innerHTML = link;
         } else if (isMyMove()) {
           display['your-move'] = 'block';
         } else {
@@ -95,24 +98,10 @@
           document.getElementById(label).style.display = display[label];
         }
       };
-
-      initialize = function() {
-        channel = new goog.appengine.Channel('{{ token }}');
-        socket = channel.open();
-        socket.onopen = onOpened;
-        socket.onmessage = onMessage;
-
-        var i;
-        for (i = 0; i < 9; i++) {
-          var square = document.getElementById(i);
-          square.onmouseover = new Function('highlightSquare(' + i + ')');
-          square.onclick = new Function('moveInSquare(' + i + ')');
-        }
-        updateGame();
-      }
-
+      
       isMyMove = function() {
-        return state.moveX == (state.userX == state.me);
+        return (state.winner == "") && 
+            (state.moveX == (state.userX == state.me));
       }
 
       myPiece = function() {
@@ -157,11 +146,39 @@
       
       onMessage = function(m) {
         newState = JSON.parse(m.data);
-        state.board = newState.board;
-        state.userY = newState.userY;
-        state.moveX = newState.moveX;
+        state.board = newState.board || state.board;
+        state.userX = newState.userX || state.userX;
+        state.userO = newState.userO || state.userO;
+        state.moveX = newState.moveX == 'true';
+        state.winner = newState.winner || "";
+        state.winningBoard = newState.winningBoard || "";
         updateGame();
       }
+      
+      openChannel = function() {
+        var token = '{{ token }}';
+        var channel = new goog.appengine.Channel(token);
+        var handler = {
+          'onopen': onOpened,
+          'onmessage': onMessage,
+          'onerror': function() {},
+          'onclose': function() {}
+        };
+        var socket = channel.open(handler);
+        socket.onopen = onOpened;
+        socket.onmessage = onMessage;
+      }
+      
+      initialize = function() {
+        openChannel();
+        var i;
+        for (i = 0; i < 9; i++) {
+          var square = document.getElementById(i);
+          square.onmouseover = new Function('highlightSquare(' + i + ')');
+          square.onclick = new Function('moveInSquare(' + i + ')');
+        }
+        onMessage({data: '{{ initial_message }}'});
+      }      
 
       setTimeout(initialize, 100);
 
@@ -172,9 +189,6 @@
         Waiting for another player to join.<br>
         Send them this link to play:<br>
         <div id='game-link'>
-          <a href='http://localhost:8080/?g={{ game_key }}'>
-            http://localhost:8080/?g={{ game_key }}
-          </a>
         </div>
       </div>
       <div id='your-move' style='display:none'>
