@@ -14,6 +14,7 @@ import datetime
 import logging
 import os
 import random
+import re
 from django.utils import simplejson
 from google.appengine.api import channel
 from google.appengine.api import users
@@ -29,6 +30,24 @@ class Game(db.Model):
   userO = db.UserProperty()
   board = db.StringProperty()
   moveX = db.BooleanProperty()
+  winner = db.StringProperty()
+  winning_board = db.StringProperty()
+  
+
+class Wins():
+  x_win_patterns = ['XXX......',
+                    '...XXX...',
+                    '......XXX',
+                    'X..X..X..',
+                    '.X..X..X.',
+                    '..X..X..X',
+                    'X...X...X',
+                    '..X.X.X..']
+
+  o_win_patterns = map(lambda s: s.replace('X','O'), x_win_patterns)
+  
+  x_wins = map(lambda s: re.compile(s), x_win_patterns)
+  o_wins = map(lambda s: re.compile(s), o_win_patterns)
 
 
 class GameUpdater():
@@ -36,13 +55,15 @@ class GameUpdater():
 
   def __init__(self, game):
     self.game = game
-    
+
   def get_game_message(self):
     gameUpdate = {
       'board': self.game.board,
       'userX': self.game.userX.user_id(),
       'userO': '' if not self.game.userO else self.game.userO.user_id(),
-      'moveX': self.game.moveX
+      'moveX': self.game.moveX,
+      'winner': self.game.winner,
+      'winningBoard': self.game.winning_board
     }
     return simplejson.dumps(gameUpdate)
 
@@ -51,33 +72,46 @@ class GameUpdater():
     channel.send_message(self.game.userX.user_id() + self.game.key().id_or_name(), message)
     if self.game.userO:
       channel.send_message(self.game.userO.user_id() + self.game.key().id_or_name(), message)
-      
+
   def check_win(self):
-    
-    
+    if self.game.moveX:
+      # O just moved, check for O wins
+      wins = Wins().o_wins
+      potential_winner = self.game.userO.user_id()
+    else:
+      # X just moved, check for X wins
+      wins = Wins().x_wins
+      potential_winner = self.game.userX.user_id()
+      
+    for win in wins:
+      if win.match(self.game.board):
+        self.game.winner = potential_winner
+        self.game.winning_board = win.pattern
+        return
+
   def make_move(self, position, user):
-    if position >= 0 and game and user == game.userX or user == game.userO:
-      if game.moveX == (user == game.userX):
-        boardList = list(game.board)
-        if (boardList[id] == ' '):
-          boardList[id] = 'X' if game.moveX else 'O'
-          game.board = "".join(boardList)
-          game.moveX = not game.moveX
+    if position >= 0 and user == self.game.userX or user == self.game.userO:
+      if self.game.moveX == (user == self.game.userX):
+        boardList = list(self.game.board)
+        if (boardList[position] == ' '):
+          boardList[position] = 'X' if self.game.moveX else 'O'
+          self.game.board = "".join(boardList)
+          self.game.moveX = not self.game.moveX
           self.check_win()
-          game.put()
-          GameUpdater(game).send_update()
+          self.game.put()
+          self.send_update()
           return
 
 
 class GameFromRequest():
   game = None;
-  
+
   def __init__(self, request):
     user = users.get_current_user()
     game_key = request.get('g')
-    if user and id:
+    if user and game_key:
       self.game = Game.get_by_key_name(game_key)
-      
+
   def get_game(self):
     return self.game
 
@@ -87,10 +121,11 @@ class MovePage(webapp.RequestHandler):
   def post(self):
     game = GameFromRequest(self.request).get_game()
     user = users.get_current_user()
-    id = int(self.request.get('i'))
-    gameUpdater(game).make_move(id, user)
-    
-    
+    if game and user:
+      id = int(self.request.get('i'))
+      GameUpdater(game).make_move(id, user)
+
+
 class OpenedPage(webapp.RequestHandler):
   def post(self):
     game = GameFromRequest(self.request).get_game()
@@ -109,23 +144,21 @@ class MainPage(webapp.RequestHandler):
     if user:
       if not game_key:
         game_key = user.user_id()
-        token = channel.create_channel(user.user_id() + game_key)
-
         game = Game(key_name = game_key,
                     userX = user,
                     moveX = True,
                     board = '         ')
         game.put()
       else:
-        token = channel.create_channel(user.user_id() + game_key)
         game = Game.get_by_key_name(game_key)
         if not game.userO:
           game.userO = user
           game.put()
-          
+
       game_link = 'http://localhost:8080/?g=' + game_key
-          
+
       if game:
+        token = channel.create_channel(user.user_id() + game_key)
         template_values = {'token': token,
                            'me': user.user_id(),
                            'game_key': game_key,
