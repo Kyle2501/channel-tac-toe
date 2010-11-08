@@ -26,7 +26,7 @@ from google.appengine.ext.webapp.util import run_wsgi_app
 class Game(db.Model):
   """All the data we store for a game"""
   userX = db.UserProperty()
-  userY = db.UserProperty()
+  userO = db.UserProperty()
   board = db.StringProperty()
   moveX = db.BooleanProperty()
 
@@ -36,19 +36,37 @@ class GameUpdater():
 
   def __init__(self, game):
     self.game = game
-
-  def send_update(self):
+    
+  def get_game_message(self):
     gameUpdate = {
       'board': self.game.board,
       'userX': self.game.userX.user_id(),
-      'userY': '' if not self.game.userY else self.game.userY.user_id(),
+      'userO': '' if not self.game.userO else self.game.userO.user_id(),
       'moveX': self.game.moveX
     }
+    return simplejson.dumps(gameUpdate)
 
-    message = simplejson.dumps(gameUpdate)
+  def send_update(self):
+    message = self.get_game_message()
     channel.send_message(self.game.userX.user_id() + self.game.key().id_or_name(), message)
-    if self.game.userY:
-      channel.send_message(self.game.userY.user_id() + self.game.key().id_or_name(), message)
+    if self.game.userO:
+      channel.send_message(self.game.userO.user_id() + self.game.key().id_or_name(), message)
+      
+  def check_win(self):
+    
+    
+  def make_move(self, position, user):
+    if position >= 0 and game and user == game.userX or user == game.userO:
+      if game.moveX == (user == game.userX):
+        boardList = list(game.board)
+        if (boardList[id] == ' '):
+          boardList[id] = 'X' if game.moveX else 'O'
+          game.board = "".join(boardList)
+          game.moveX = not game.moveX
+          self.check_win()
+          game.put()
+          GameUpdater(game).send_update()
+          return
 
 
 class GameFromRequest():
@@ -70,18 +88,7 @@ class MovePage(webapp.RequestHandler):
     game = GameFromRequest(self.request).get_game()
     user = users.get_current_user()
     id = int(self.request.get('i'))
-    if id >= 0 and game and user == game.userX or user == game.userY:
-      if game.moveX == (user == game.userX):
-        boardList = list(game.board)
-        if (boardList[id] == ' '):
-          boardList[id] = 'X' if game.moveX else 'Y'
-          game.board = "".join(boardList)
-          game.moveX = not game.moveX
-          game.put()
-          GameUpdater(game).send_update()
-          self.response.out.write('ok')
-          return
-    self.response.out.write('no')
+    gameUpdater(game).make_move(id, user)
     
     
 class OpenedPage(webapp.RequestHandler):
@@ -102,10 +109,7 @@ class MainPage(webapp.RequestHandler):
     if user:
       if not game_key:
         game_key = user.user_id()
-        token = 'x'
-        while len(token) % 4 != 0:
-          game_key = game_key + 'x'
-          token = channel.create_channel(user.user_id() + game_key)
+        token = channel.create_channel(user.user_id() + game_key)
 
         game = Game(key_name = game_key,
                     userX = user,
@@ -115,18 +119,19 @@ class MainPage(webapp.RequestHandler):
       else:
         token = channel.create_channel(user.user_id() + game_key)
         game = Game.get_by_key_name(game_key)
-        if not game.userY:
-          game.userY = user
+        if not game.userO:
+          game.userO = user
           game.put()
+          
+      game_link = 'http://localhost:8080/?g=' + game_key
           
       if game:
         template_values = {'token': token,
                            'me': user.user_id(),
-                           'moveX': game.moveX,
-                           'board': game.board,
                            'game_key': game_key,
-                           'userX': game.userX.user_id(),
-                           'userY': '' if not game.userY else game.userY.user_id()}
+                           'game_link': game_link,
+                           'initial_message': GameUpdater(game).get_game_message()
+                          }
         path = os.path.join(os.path.dirname(__file__), 'index.html')
 
         self.response.out.write(template.render(path, template_values))
