@@ -1,90 +1,122 @@
 <html>
   <head>
-<!--        <script src='/_ah/channel/jsapi'></script> -->
-      <script src='http://qabdt6.prod.google.com:9886/talkgadget/channel.js'></script>
+      <script src='/_ah/channel/jsapi'></script>
       <style type='text/css'>
-        .row {
-          float: top;
-        }
-        
-        .board {
-          margin: 20px;
+        body {
+          font-family: 'Helvetica';
         }
 
+        #board {
+          width:152px; 
+          height: 152px;
+          margin: 20px auto;
+        }
+        
+        #display-area {
+          text-align: center;
+        }
+        
+        #this-game {
+          font-size: 9pt;
+        }
+        
+        #winner {
+        }
+        
+        table {
+          border-collapse: collapse;
+        }
+        
         td {
           width: 50px;
           height: 50px;
           font-family: "Helvetica";
           font-size: 16pt;
+          text-align: center;
+          vertical-align: middle;
+          margin:0px;
+          padding: 0px;
+        }
+        
+        div.cell {
+          float: left;
+          width: 50px;
+          height: 50px;
           border: none;
           margin: 0px;
           padding: 0px;
-          text-align: center;
-          vertical-align: middle;
         }
         
-        td.ul {
-          border-bottom: 1pt solid black;
+        div.mark {
+          position: absolute;
+          top: 15px;          
+        }
+        
+        div.l {
           border-right: 1pt solid black;
         }
         
-        td.um {
-          border-bottom: 1pt solid black;
+        div.c {
         }
         
-        td.ur {
-          border-bottom: 1pt solid black;
+        div.r {
           border-left: 1pt solid black;
         }
         
-        td.ml {
-          border-right: 1px solid black;
+        div.t {
+          border-bottom: 1pt solid black;
         }
         
-        td.mr {
-          border-left: 1px solid black;
+        div.m {
         }
         
-        td.bl {
-          border-top: 1pt solid black;
-          border-right: 1pt solid black;
-        }
-        
-        td.bm {
+        div.b {
           border-top: 1pt solid black;
         }
-        
-        td.br {
-          border-top: 1pt solid black;
-          border-left: 1pt solid black;
-        }      
       </style>
   </head>
   <body>
     <script type='text/javascript'>
       var state = {
-        me: '{{ me }}',
-        userX: '{{ userX }}',
-        userY: '{{ userY }}',
-        token: '{{ token }}',
-        board: '{{ board }}',
         game_key: '{{ game_key }}',
-        moveX: '{{ moveX }}' == 'True'
+        me: '{{ me }}'
       };
 
       updateGame = function() {
         for (i = 0; i < 9; i++) {
-          document.getElementById(i).innerHTML = state.board[i];
+          var square = document.getElementById(i);
+          square.innerHTML = state.board[i];
+          if (state.winner != '' && state.winningBoard != '') {
+            if (state.winningBoard[i] == state.board[i]) {
+              if (state.winner == state.me) {
+                square.style.background = "green";
+              } else {
+                square.style.background = "red";
+              }
+            } else {
+              square.style.background = "white";
+            }
+          }
         }
         
         var display = {
           'other-player': 'none',
           'your-move': 'none',
           'their-move': 'none',
+          'you-won': 'none',
+          'you-lost': 'none',
+          'board': 'block',
+          'this-game': 'block',
         }; 
 
-        if (state.userY == '') {
+        if (!state.userO || state.userO == '') {
           display['other-player'] = 'block';
+          display['board'] = 'none';
+          display['this-game'] = 'none';
+        } else if (state.winner == state.me) {
+          display['you-won'] = 'block';
+        } else if (state.winner != '') {
+          display['you-lost'] = 'block';
         } else if (isMyMove()) {
           display['your-move'] = 'block';
         } else {
@@ -95,24 +127,10 @@
           document.getElementById(label).style.display = display[label];
         }
       };
-
-      initialize = function() {
-        channel = new goog.appengine.Channel('{{ token }}');
-        socket = channel.open();
-        socket.onopen = onOpened;
-        socket.onmessage = onMessage;
-
-        var i;
-        for (i = 0; i < 9; i++) {
-          var square = document.getElementById(i);
-          square.onmouseover = new Function('highlightSquare(' + i + ')');
-          square.onclick = new Function('moveInSquare(' + i + ')');
-        }
-        updateGame();
-      }
-
+      
       isMyMove = function() {
-        return state.moveX == (state.userX == state.me);
+        return (state.winner == "") && 
+            (state.moveX == (state.userX == state.me));
       }
 
       myPiece = function() {
@@ -136,18 +154,21 @@
       }
 
       highlightSquare = function(id) {
+        if (state.winner != "") {
+          return;
+        }
         for (i = 0; i < 9; i++) {
           if (i == id  && isMyMove()) {
             if (state.board[i] = ' ') {
-              color = 'lightblue';
+              color = 'lightBlue';
             } else {
-              color = 'lightgrey';
+              color = 'lightGrey';
             }
           } else {
             color = 'white';
           }
 
-          document.getElementById(i).style['background-color'] = color;
+          document.getElementById(i).style['background'] = color;
         }
       }
       
@@ -157,11 +178,39 @@
       
       onMessage = function(m) {
         newState = JSON.parse(m.data);
-        state.board = newState.board;
-        state.userY = newState.userY;
+        state.board = newState.board || state.board;
+        state.userX = newState.userX || state.userX;
+        state.userO = newState.userO || state.userO;
         state.moveX = newState.moveX;
+        state.winner = newState.winner || "";
+        state.winningBoard = newState.winningBoard || "";
         updateGame();
       }
+      
+      openChannel = function() {
+        var token = '{{ token }}';
+        var channel = new goog.appengine.Channel(token);
+        var handler = {
+          'onopen': onOpened,
+          'onmessage': onMessage,
+          'onerror': function() {},
+          'onclose': function() {}
+        };
+        var socket = channel.open(handler);
+        socket.onopen = onOpened;
+        socket.onmessage = onMessage;
+      }
+      
+      initialize = function() {
+        openChannel();
+        var i;
+        for (i = 0; i < 9; i++) {
+          var square = document.getElementById(i);
+          square.onmouseover = new Function('highlightSquare(' + i + ')');
+          square.onclick = new Function('moveInSquare(' + i + ')');
+        }
+        onMessage({data: '{{ initial_message }}'});
+      }      
 
       setTimeout(initialize, 100);
 
@@ -171,11 +220,7 @@
       <div id='other-player' style='display:none'>
         Waiting for another player to join.<br>
         Send them this link to play:<br>
-        <div id='game-link'>
-          <a href='http://localhost:8080/?g={{ game_key }}'>
-            http://localhost:8080/?g={{ game_key }}
-          </a>
-        </div>
+        <div id='game-link'><a href='{{ game_link }}'>{{ game_link }}</a></div>
       </div>
       <div id='your-move' style='display:none'>
         Your move! Click a square to place your piece.
@@ -183,24 +228,25 @@
       <div id='their-move' style='display:none'>
         Waiting for other player to move...
       </div>
+      <div id='you-won'>
+        You won this game!
+      </div>
+      <div id='you-lost'>
+        You lost this game.
+      </div>
       <div id='board'>
-        <table style='border-spacing: 0px 0px'>
-          <tr>
-            <td id='0' class='ul'></td>
-            <td id='1' class='um'></td>
-            <td id='2' class='ur'></td>
-          </tr>
-          <tr>
-            <td id='3' class='ml'></td>
-            <td id='4' class='mm'></td>
-            <td id='5' class='mr'></td>
-          </tr>
-          <tr>
-            <td id='6' class='bl'></td>
-            <td id='7' class='bm'></td>
-            <td id='8' class='br'></td>
-          </tr>
-        </table>
+        <div class='t l cell'><table><tr><td id='0'></td></tr></td></table></div>
+        <div class='t c cell'><table><tr><td id='1'></td></tr></td></table></div>
+        <div class='t r cell'><table><tr><td id='2'></td></tr></td></table></div>
+        <div class='m l cell'><table><tr><td id='3'></td></tr></td></table></div>
+        <div class='m c cell'><table><tr><td id='4'></td></tr></td></table></div>
+        <div class='m r cell'><table><tr><td id='5'></td></tr></td></table></div>
+        <div class='b l cell'><table><tr><td id='6'></td></tr></td></table></div>
+        <div class='b c cell'><table><tr><td id='7'></td></tr></td></table></div>
+        <div class='b r cell'><table><tr><td id='8'></td></tr></td></table></div>
+      </div>
+      <div id='this-game' float='top'>
+        Quick link to this game: <span id='this-game-link'><a href='{{ game_link }}'>{{ game_link }}</a></span>
       </div>
     </div>
   </body>
